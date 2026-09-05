@@ -1,0 +1,58 @@
+{
+    "menu": {
+        "programs": "Programs",
+        "programs_new": "New",
+        "programs_open": "Open",
+        "programs_delete": "Delete",
+        "project": "Project",
+        "project_build": "Build"
+    },
+    "dialog": {
+        "new_program": {
+            "title": "New Program",
+            "name_label": "Program Name",
+            "name_placeholder": "Enter program name",
+            "confirm": "Create",
+            "cancel": "Cancel"
+        },
+        "open_program": {
+            "title": "Open Program",
+            "no_programs": "No programs found.",
+            "confirm": "Open",
+            "cancel": "Cancel"
+        }
+    },
+    "confirm": {
+        "delete_program_header": "Delete Program",
+        "delete_program_message": "Are you sure you want to delete the program \"{name}\"? This action cannot be undone.",
+        "yes": "Yes",
+        "no": "No"
+    },
+    "blocks_panel": {
+        "title": "Blocks",
+        "drag_hint": "Drag a block onto the diagram"
+    },
+    "diagram": {
+        "no_program": "No program open. Use Programs → Open or Programs → New."
+    },
+    "block_config": {
+        "title": "Configure Block",
+        "name_label": "Name",
+        "save": "Save",
+        "cancel": "Cancel"
+    },
+    "toast": {
+        "error_title": "Error",
+        "success_title": "Success",
+        "program_created": "Program \"{name}\" created.",
+        "program_deleted": "Program deleted.",
+        "program_opened": "Program \"{name}\" opened.",
+        "build_success": "Code generated. Downloading main.cpp…",
+        "build_error": "Code generation errors:",
+        "connection_failed": "Cannot connect: {detail}",
+        "block_update_failed": "Failed to update block: {detail}",
+        "block_add_failed": "Failed to add block: {detail}",
+        "no_program_open": "No program is currently open.",
+        "delete_no_program": "No program is currently open to delete."
+    }
+}
