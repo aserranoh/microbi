@@ -34,6 +34,11 @@ class DataType(StrEnum):
     INT32 = "int32"
 
 
+class FieldType(StrEnum):
+    INTEGER = "integer"
+    ENUM = "enum"
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Position:
     x: float
@@ -53,6 +58,7 @@ class Port:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ConfigurationField[T]:
     name: str
+    type: FieldType
     default: T
 
     def __post_init__(self) -> None:
@@ -65,6 +71,7 @@ class ConfigurationField[T]:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class IntegerConfiguration(ConfigurationField[int]):
+    type: FieldType = field(init=False, default=FieldType.INTEGER)
     min: int | None = None
     max: int | None = None
 
@@ -91,7 +98,8 @@ class IntegerConfiguration(ConfigurationField[int]):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class EnumConfiguration(ConfigurationField[str]):
-    choices: list[str]
+    type: FieldType = field(init=False, default=FieldType.ENUM)
+    choices: tuple[str, ...]
     default: str
 
     def __post_init__(self) -> None:
@@ -120,10 +128,8 @@ class EnumConfiguration(ConfigurationField[str]):
 class BlockType:
     name: str
     description: str
-    ports: list[Port] = field(default_factory=list[Port])
-    configuration: list[ConfigurationField] = field(
-        default_factory=list[ConfigurationField]
-    )
+    ports: tuple[Port, ...]
+    configuration: tuple[ConfigurationField, ...]
 
     def __post_init__(self) -> None:
         ensure_non_empty_name(self.name)
@@ -258,7 +264,10 @@ class Program:
         self.connections.remove(connection)
 
     def rename_block(self, block: Block, new_name: str) -> None:
-        repeated = next((b for b in self.blocks if b.name == new_name), None)
+        repeated = next(
+            (b for b in self.blocks if b != block and b.name == new_name),
+            None,
+        )
         if repeated is not None:
             raise DuplicatedBlockNameError(new_name)
         block.name = new_name
@@ -285,6 +294,7 @@ class UpdateBlockRequest:
     program_id: UUID
     block_id: UUID
     block_name: str | None = None
+    block_position: Position | None = None
     block_config: dict[str, object] = field(default_factory=dict)
 
 
@@ -360,7 +370,7 @@ class BlockTypesRegistry:
 def port_configuration(name: str = "port") -> EnumConfiguration:
     return EnumConfiguration(
         name=name,
-        choices=["A", "B", "C", "D"],
+        choices=("A", "B", "C", "D"),
         default="A",
     )
 

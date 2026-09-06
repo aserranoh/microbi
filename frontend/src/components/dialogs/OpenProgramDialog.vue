@@ -41,12 +41,15 @@ function onCancel() {
 <template>
   <Dialog
     :visible="props.visible"
-    :header="t('dialog.open_program.title')"
     :modal="true"
     :closable="false"
+    :draggable="false"
     class="w-96"
     @update:visible="emit('update:visible', $event)"
   >
+    <template #header>
+      <span class="font-semibold text-lg w-full text-center">{{ t('dialog.open_program.title') }}</span>
+    </template>
     <div class="flex flex-col gap-1 mb-4 min-h-24">
       <p v-if="programs.length === 0" class="text-surface-500 text-sm">
         {{ t('dialog.open_program.no_programs') }}

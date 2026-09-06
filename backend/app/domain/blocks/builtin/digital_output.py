@@ -39,17 +39,17 @@ def init(registry: BlockTypesRegistry) -> None:
         block_type=BlockType(
             name="Digital Output",
             description="A digital output block",
-            ports=[
+            ports=(
                 Port(
                     name="value",
                     direction=PortDirection.INPUT,
                     data_type=DataType.BOOL,
-                )
-            ],
-            configuration=[
+                ),
+            ),
+            configuration=(
                 port_configuration(),
                 pin_configuration(),
-            ],
+            ),
         ),
         implementation=DigitalOutputImplementation(),
     )

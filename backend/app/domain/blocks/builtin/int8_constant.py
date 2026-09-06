@@ -26,21 +26,21 @@ def init(registry: BlockTypesRegistry) -> None:
         block_type=BlockType(
             name="Int8 Constant",
             description="An 8-bit integer constant block",
-            ports=[
+            ports=(
                 Port(
                     name="value",
                     direction=PortDirection.OUTPUT,
                     data_type=DataType.INT8,
-                )
-            ],
-            configuration=[
+                ),
+            ),
+            configuration=(
                 IntegerConfiguration(
                     name="value",
                     default=0,
                     min=-128,
                     max=127,
-                )
-            ],
+                ),
+            ),
         ),
         implementation=Int8ConstantImplementation(),
     )

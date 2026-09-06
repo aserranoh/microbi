@@ -2,7 +2,6 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
-from pydantic import BaseModel, Field
 
 from app.dependencies import get_block_types_registry, get_programs_repository
 from app.domain import use_cases
@@ -19,61 +18,22 @@ from app.domain.errors import (
     UnknownBlockConfigurationError,
 )
 from app.domain.models import (
-    AddBlockRequest,
     BlockTypesRegistry,
     CodeGenerationResult,
-    ConnectBlocksRequest,
     Program,
-    UpdateBlockRequest,
+)
+
+from .schemas import (
+    AddBlockRequestIn,
+    ConnectBlocksRequestIn,
+    ProgramResponse,
+    UpdateBlockRequestIn,
 )
 
 router = APIRouter(prefix="/programs", tags=["programs"])
 
 
-class PositionIn(BaseModel):
-    x: float
-    y: float
-
-
-class AddBlockRequestIn(BaseModel):
-    program_id: UUID
-    block_type_name: str = Field(min_length=1)
-    block_position: PositionIn
-
-    def domain_model(self) -> AddBlockRequest:
-        return AddBlockRequest(**self.model_dump())
-
-
-class UpdateBlockRequestIn(BaseModel):
-    program_id: UUID
-    block_name: str | None = Field(
-        default=None,
-        pattern=r"^[_a-zA-Z][_a-zA-Z0-9]*$",
-    )
-    block_position: PositionIn | None = None
-    block_config: dict[str, object] | None = None
-
-    def domain_model(self, block_id: UUID) -> UpdateBlockRequest:
-        return UpdateBlockRequest(
-            **self.model_dump(exclude_unset=True),
-            block_id=block_id,
-        )
-
-
-class ConnectBlocksRequestIn(BaseModel):
-    source_block_id: UUID
-    source_port: str
-    target_block_id: UUID
-    target_port: str
-
-    def domain_model(self, program_id: UUID) -> ConnectBlocksRequest:
-        return ConnectBlocksRequest(
-            program_id=program_id,
-            **self.model_dump(exclude_unset=True),
-        )
-
-
-@router.get("/")
+@router.get("/", response_model=list[ProgramResponse])
 async def get_programs(
     adapter: Annotated[
         MongoProgramsRepository,
@@ -83,7 +43,7 @@ async def get_programs(
     return await use_cases.get_all_programs(adapter)
 
 
-@router.get("/{program_id}")
+@router.get("/{program_id}", response_model=ProgramResponse)
 async def get_program(
     program_id: UUID,
     adapter: Annotated[
@@ -100,7 +60,11 @@ async def get_program(
         ) from e
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ProgramResponse,
+)
 async def create_program(
     program_name: Annotated[str, Body(min_length=1, embed=True)],
     adapter: Annotated[
@@ -134,7 +98,11 @@ async def delete_program(
         ) from e
 
 
-@router.post("/{program_id}/blocks", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{program_id}/blocks",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ProgramResponse,
+)
 async def add_block(
     request_in: AddBlockRequestIn,
     adapter: Annotated[
@@ -184,7 +152,7 @@ async def delete_block(
         ) from e
 
 
-@router.put("/{program_id}/blocks/{block_id}")
+@router.put("/{program_id}/blocks/{block_id}", response_model=ProgramResponse)
 async def update_block(
     block_id: UUID,
     request_in: UpdateBlockRequestIn,
@@ -219,7 +187,7 @@ async def update_block(
         ) from e
 
 
-@router.patch("/{program_id}/connect")
+@router.patch("/{program_id}/connect", response_model=ProgramResponse)
 async def connect_blocks(
     program_id: UUID,
     request_in: ConnectBlocksRequestIn,
@@ -254,7 +222,10 @@ async def connect_blocks(
         ) from e
 
 
-@router.delete("/{program_id}/connections/{connection_id}")
+@router.delete(
+    "/{program_id}/connections/{connection_id}",
+    response_model=ProgramResponse,
+)
 async def remove_connection(
     program_id: UUID,
     connection_id: UUID,

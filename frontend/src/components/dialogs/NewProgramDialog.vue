@@ -31,12 +31,15 @@ function onCancel() {
 <template>
   <Dialog
     :visible="props.visible"
-    :header="t('dialog.new_program.title')"
     :modal="true"
     :closable="false"
+    :draggable="false"
     class="w-80"
     @update:visible="emit('update:visible', $event)"
   >
+    <template #header>
+      <span class="font-semibold text-lg w-full text-center">{{ t('dialog.new_program.title') }}</span>
+    </template>
     <div class="flex flex-col gap-1 mb-4">
       <label class="text-xs text-surface-500">{{ t('dialog.new_program.name_label') }}</label>
       <InputText

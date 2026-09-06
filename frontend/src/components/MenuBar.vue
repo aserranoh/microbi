@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
@@ -26,19 +26,19 @@ function toggleDark() {
   document.documentElement.classList.toggle('dark', isDark.value)
 }
 
-const menuItems: MenuItem[] = [
+// menuItems must be computed so that `disabled` reacts to programStore changes
+const menuItems = computed<MenuItem[]>(() => [
   {
     label: t('menu.programs'),
     items: [
-      { label: t('menu.programs_new'), command: () => { showNewDialog.value = true } },
-      { label: t('menu.programs_open'), command: () => { showOpenDialog.value = true } },
+      { label: t('menu.programs_new'), icon: 'pi pi-plus', command: () => { showNewDialog.value = true } },
+      { label: t('menu.programs_open'), icon: 'pi pi-folder-open', command: () => { showOpenDialog.value = true } },
       {
         label: t('menu.programs_delete'),
+        icon: 'pi pi-trash',
+        disabled: !programStore.currentProgram,
         command: () => {
-          if (!programStore.currentProgram) {
-            toast.add({ severity: 'warn', summary: t('toast.error_title'), detail: t('toast.delete_no_program'), life: 3000 })
-            return
-          }
+          if (!programStore.currentProgram) return
           confirm.require({
             header: t('confirm.delete_program_header'),
             message: t('confirm.delete_program_message', { name: programStore.currentProgram.name }),
@@ -63,6 +63,7 @@ const menuItems: MenuItem[] = [
     items: [
       {
         label: t('menu.project_build'),
+        icon: 'pi pi-cog',
         command: async () => {
           if (!programStore.currentProgram) {
             toast.add({ severity: 'warn', summary: t('toast.error_title'), detail: t('toast.no_program_open'), life: 3000 })
@@ -90,7 +91,7 @@ const menuItems: MenuItem[] = [
       },
     ],
   },
-]
+])
 
 async function onNewProgram(name: string) {
   try {
@@ -110,14 +111,22 @@ async function onOpenProgram(program: Program) {
 </script>
 
 <template>
-  <div class="flex items-center bg-surface-0 dark:bg-surface-900 border-b border-surface-200 dark:border-surface-700 px-2">
-    <Menubar :model="menuItems" class="border-none bg-transparent shadow-none flex-1" />
+  <!--
+    border-none alone doesn't work because PrimeVue's unlayered CSS (cssLayer:false)
+    outranks Tailwind utilities (which are in @layer utilities). We use pt.root to
+    apply an inline style instead, which has highest CSS specificity.
+  -->
+  <div class="flex items-center border-b border-surface-200 dark:border-surface-700 px-2 bg-surface-0 dark:bg-surface-900 select-none">
+    <Menubar
+      :model="menuItems"
+      class="flex-1"
+      :pt="{ root: { style: 'border: none; box-shadow: none; background: transparent; padding: 0;' } }"
+    />
     <Button
       :icon="isDark ? 'pi pi-sun' : 'pi pi-moon'"
       rounded
       text
       severity="secondary"
-      class="ml-auto"
       :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
       @click="toggleDark"
     />

@@ -13,26 +13,26 @@ export interface BaseConfigField {
 }
 
 export interface IntegerConfigField extends BaseConfigField {
+    type: 'integer'
     default: number
     min: number | null
     max: number | null
-    choices?: never
 }
 
 export interface EnumConfigField extends BaseConfigField {
+    type: 'enum'
     default: string
     choices: string[]
-    min?: never
 }
 
 export type ConfigField = IntegerConfigField | EnumConfigField
 
 export function isEnumField(f: ConfigField): f is EnumConfigField {
-    return Array.isArray((f as EnumConfigField).choices)
+    return f.type === 'enum'
 }
 
 export function isIntegerField(f: ConfigField): f is IntegerConfigField {
-    return !isEnumField(f)
+    return f.type === 'integer'
 }
 
 export interface BlockType {

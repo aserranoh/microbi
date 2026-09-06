@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { useProgramStore } from '@/stores/program'
+import { useBlockTypesStore } from '@/stores/blockTypes'
 
 const { t } = useI18n()
-const programStore = useProgramStore()
+const blockTypesStore = useBlockTypesStore()
 
 function onDragStart(event: DragEvent, blockTypeName: string) {
   event.dataTransfer?.setData('application/microbi-block-type', blockTypeName)
@@ -20,7 +20,7 @@ function onDragStart(event: DragEvent, blockTypeName: string) {
     </h2>
     <p class="text-xs text-surface-400 dark:text-surface-500 mb-2">{{ t('blocks_panel.drag_hint') }}</p>
     <div
-      v-for="bt in programStore.blockTypes"
+      v-for="bt in blockTypesStore.blockTypes"
       :key="bt.name"
       draggable="true"
       class="px-3 py-2 rounded bg-surface-100 dark:bg-surface-700 text-surface-800 dark:text-surface-100 text-sm cursor-grab select-none border border-surface-200 dark:border-surface-600 hover:bg-primary-50 dark:hover:bg-primary-900 transition-colors"

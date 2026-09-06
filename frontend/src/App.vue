@@ -7,5 +7,5 @@ import ConfirmDialog from 'primevue/confirmdialog'
 <template>
   <RouterView />
   <Toast />
-  <ConfirmDialog />
+  <ConfirmDialog :draggable="false" :closable="false" />
 </template>

@@ -1,2 +1,14 @@
 @import "tailwindcss";
 @import "tailwindcss-primeui";
+
+/* Enable class-based dark mode for Tailwind v4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Prevent accidental text selection on interactive UI elements */
+.p-menubar,
+.p-menubar *,
+.p-button,
+.vue-flow__node,
+.vue-flow__node * {
+    user-select: none;
+}

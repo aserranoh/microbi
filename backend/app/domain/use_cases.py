@@ -112,6 +112,8 @@ async def update_block(
     block_type = blocks_registry.get_block_type(block.block_type)
     if request.block_name:
         program.rename_block(block, request.block_name)
+    if request.block_position is not None:
+        block.position = request.block_position
     block_type.validate_configuration(request.block_config)
     block.update_configuration(request.block_config)
     await programs_repo.update(program)

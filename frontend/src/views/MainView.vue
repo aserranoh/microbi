@@ -3,12 +3,12 @@ import { onMounted } from 'vue'
 import MenuBar from '@/components/MenuBar.vue'
 import BlocksPanel from '@/components/BlocksPanel.vue'
 import ProgramDiagram from '@/components/ProgramDiagram.vue'
-import { useProgramStore } from '@/stores/program'
+import { useBlockTypesStore } from '@/stores/blockTypes'
 
-const programStore = useProgramStore()
+const blockTypesStore = useBlockTypesStore()
 
 onMounted(() => {
-  programStore.loadBlockTypes()
+  blockTypesStore.load()
 })
 </script>
 

@@ -42,12 +42,13 @@ export async function updateBlock(
     blockId: string,
     blockName?: string,
     blockConfig?: Record<string, unknown>,
+    blockPosition?: { x: number; y: number },
 ): Promise<Program> {
     const response = await apiClient.put<Program>(`/programs/${programId}/blocks/${blockId}`, {
         program_id: programId,
-        block_id: blockId,
         ...(blockName !== undefined && { block_name: blockName }),
         ...(blockConfig !== undefined && { block_config: blockConfig }),
+        ...(blockPosition !== undefined && { block_position: blockPosition }),
     })
     return response.data
 }
