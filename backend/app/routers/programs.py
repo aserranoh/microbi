@@ -3,9 +3,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 
-from app.dependencies import get_block_types_registry, get_programs_repository
+from app.dependencies import (
+    get_avr_gcc_compiler,
+    get_block_types_registry,
+    get_programs_repository,
+)
 from app.domain import use_cases
-from app.domain.adapters import MongoProgramsRepository
+from app.domain.adapters import AvrGccCompiler, MongoProgramsRepository
 from app.domain.errors import (
     BlockNotFoundError,
     BlocksConnectionError,
@@ -25,6 +29,7 @@ from app.domain.models import (
 
 from .schemas import (
     AddBlockRequestIn,
+    CompileOptionsIn,
     ConnectBlocksRequestIn,
     ProgramResponse,
     UpdateBlockRequestIn,
@@ -154,6 +159,7 @@ async def delete_block(
 
 @router.put("/{program_id}/blocks/{block_id}", response_model=ProgramResponse)
 async def update_block(
+    program_id: UUID,
     block_id: UUID,
     request_in: UpdateBlockRequestIn,
     adapter: Annotated[
@@ -163,7 +169,7 @@ async def update_block(
     registry: Annotated[BlockTypesRegistry, Depends(get_block_types_registry)],
 ) -> Program:
     try:
-        request = request_in.domain_model(block_id)
+        request = request_in.domain_model(program_id, block_id)
         return await use_cases.update_block(request, adapter, registry)
     except ProgramNotFoundError as e:
         raise HTTPException(
@@ -252,17 +258,25 @@ async def remove_connection(
         ) from e
 
 
-@router.post("/{program_id}/generate-code")
-async def generate_code(
+@router.post("/{program_id}/build")
+async def build(
     program_id: UUID,
+    compile_options_in: CompileOptionsIn,
     adapter: Annotated[
         MongoProgramsRepository,
         Depends(get_programs_repository),
     ],
     registry: Annotated[BlockTypesRegistry, Depends(get_block_types_registry)],
+    compiler: Annotated[AvrGccCompiler, Depends(get_avr_gcc_compiler)],
 ) -> CodeGenerationResult:
     try:
-        return await use_cases.generate_code(program_id, adapter, registry)
+        return await use_cases.build(
+            program_id,
+            compile_options_in.domain_model(),
+            adapter,
+            registry,
+            compiler,
+        )
     except ProgramNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

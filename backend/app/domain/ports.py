@@ -1,7 +1,7 @@
 from typing import Protocol
 from uuid import UUID
 
-from .models import Program
+from .models import CompileOptions, Program
 
 
 class ProgramsRepositoryPort(Protocol):
@@ -16,3 +16,8 @@ class ProgramsRepositoryPort(Protocol):
     async def delete(self, program: Program) -> None: ...
 
     async def update(self, program: Program) -> None: ...
+
+
+class CompilerPort(Protocol):
+    def compile(self, cpp_code: str, options: CompileOptions) -> str: ...
+    def get_mcus(self) -> list[str]: ...

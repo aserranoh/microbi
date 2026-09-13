@@ -1,4 +1,8 @@
+import subprocess
 from dataclasses import dataclass, field
+from enum import StrEnum
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Self
 from uuid import UUID
 
@@ -6,7 +10,7 @@ from pydantic import TypeAdapter
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.collection import AsyncCollection
 
-from .models import Program
+from .models import CompileOptions, Program
 
 COLLECTION_NAME = "programs"
 
@@ -61,3 +65,61 @@ class MongoProgramsRepository:
         if doc is None:
             return None
         return TypeAdapter(Program).validate_python(doc)
+
+
+class AvrMcu(StrEnum):
+    ATMEGA328P = "atmega328p"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AvrGccCompiler:
+    lib_path: Path
+
+    def get_mcus(self) -> list[str]:
+        return [mcu.value for mcu in AvrMcu]
+
+    def compile(self, cpp_code: str, options: CompileOptions) -> str:
+        with TemporaryDirectory() as temp_dir:
+            cpp_file = Path(temp_dir) / "main.cpp"
+            cpp_file.write_text(cpp_code)
+            elf_file = self._compile_and_link(
+                cpp_file,
+                options.mcu,
+                self.lib_path,
+            )
+            hex_file = self._generate_hex(elf_file)
+            return hex_file.read_text()
+
+    def _compile_and_link(
+        self,
+        cpp_file: Path,
+        mcu: str,
+        lib_path: Path,
+    ) -> Path:
+        elf_file = cpp_file.parent / f"{cpp_file.stem}.elf"
+        subprocess.run(
+            [
+                "avr-gcc",
+                f"-mmcu={mcu}",
+                "-o",
+                elf_file.as_posix(),
+                cpp_file.as_posix(),
+                f"-I{lib_path.as_posix()}",
+            ],
+            check=True,
+        )
+        return elf_file
+
+    def _generate_hex(self, elf_path: Path) -> Path:
+        hex_file = elf_path.parent / f"{elf_path.stem}.hex"
+        subprocess.run(
+            [
+                "avr-objcopy",
+                "-O",
+                "ihex",
+                elf_path.as_posix(),
+                hex_file.as_posix(),
+            ],
+            check=True,
+        )
+        return hex_file

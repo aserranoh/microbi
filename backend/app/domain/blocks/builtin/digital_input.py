@@ -1,6 +1,6 @@
 from app.domain.models import (
     Block,
-    BlockCode,
+    BlockCodeGenerationResult,
     BlockType,
     BlockTypesRegistry,
     DataType,
@@ -13,13 +13,18 @@ from app.domain.models import (
 
 
 class DigitalInputImplementation:
-    def generate_code(self, program: Program, block: Block) -> BlockCode:
-        port = block.configuration["port"]
+    def generate_code(
+        self,
+        program: Program,
+        block: Block,
+    ) -> BlockCodeGenerationResult:
+        port = f"port_{str(block.configuration['port']).lower()}"
         pin = block.configuration["pin"]
 
-        return BlockCode(
-            include="<microbi/digital_input.hpp>",
-            declaration=f"digital_input<port.{port}, {pin}> {block.name};",
+        return BlockCodeGenerationResult(
+            block=block,
+            include="#include <microbi/digital_input.hpp>",
+            declaration=f"digital_input<{port}, {pin}> {block.name};",
             main_loop_body=f"{block.name}();",
         )
 

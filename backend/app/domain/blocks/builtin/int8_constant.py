@@ -1,6 +1,6 @@
 from app.domain.models import (
     Block,
-    BlockCode,
+    BlockCodeGenerationResult,
     BlockType,
     BlockTypesRegistry,
     DataType,
@@ -12,11 +12,16 @@ from app.domain.models import (
 
 
 class Int8ConstantImplementation:
-    def generate_code(self, program: Program, block: Block) -> BlockCode:
+    def generate_code(
+        self,
+        program: Program,
+        block: Block,
+    ) -> BlockCodeGenerationResult:
         const_value = block.configuration["value"]
 
-        return BlockCode(
-            include="<microbi/int8_constant.hpp>",
+        return BlockCodeGenerationResult(
+            block=block,
+            include="#include <microbi/int8_constant.hpp>",
             declaration=f"int8_constant<{const_value}> {block.name};",
         )
 

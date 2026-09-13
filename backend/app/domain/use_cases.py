@@ -11,14 +11,14 @@ from .models import (
     Block,
     BlockType,
     BlockTypesRegistry,
-    CodeGenerationError,
     CodeGenerationResult,
+    CompileOptions,
     ConnectBlocksRequest,
     PortDirection,
     Program,
     UpdateBlockRequest,
 )
-from .ports import ProgramsRepositoryPort
+from .ports import CompilerPort, ProgramsRepositoryPort
 
 PROGRAM_TEMPLATE = """
 {include_section}
@@ -27,11 +27,12 @@ using namespace microbi;
 
 {declaration_section}
 
-auto main() -> void
+auto main() -> int
 {{
     while (true) {{
 {loop_section}
     }}
+    return 0;
 }}
 """
 
@@ -194,51 +195,19 @@ async def get_all_block_types(
     return blocks_registry.get_all_block_types()
 
 
-async def generate_code(
+async def build(
     program_id: UUID,
+    compile_options: CompileOptions,
     programs_repo: ProgramsRepositoryPort,
     block_types_registry: BlockTypesRegistry,
+    compiler: CompilerPort,
 ) -> CodeGenerationResult:
     program = await _get_program_or_raise(program_id, programs_repo)
-    block_impls = [
-        block_types_registry.get_block_implementation(block.block_type)
-        for block in program.blocks
-    ]
-    block_code_objects = [
-        block_impl.generate_code(program, block)
-        for block, block_impl in zip(program.blocks, block_impls, strict=True)
-    ]
-    blocks_code = zip(program.blocks, block_code_objects, strict=True)
-    errors = [
-        CodeGenerationError(
-            block_type=block.block_type,
-            block_name=block.name,
-            block_uuid=block.id,
-            error_message=error,
-        )
-        for block, code in blocks_code
-        if code.has_errors()
-        for error in code.errors
-    ]
-
-    return CodeGenerationResult(
-        code=PROGRAM_TEMPLATE.format(
-            include_section=_format(
-                block_code.include for block_code in block_code_objects
-            ),
-            declaration_section=_format(
-                block_code.declaration for block_code in block_code_objects
-            ),
-            loop_section=_format(
-                (
-                    block_code.main_loop_body
-                    for block_code in block_code_objects
-                ),
-                indent=8,
-            ),
-        ),
-        errors=errors,
-    )
+    cpp_code = _generate_code(program, block_types_registry)
+    if cpp_code.has_errors():
+        return cpp_code
+    hex_code = compiler.compile(cpp_code.code, compile_options)
+    return CodeGenerationResult(code=hex_code)
 
 
 async def _get_program_or_raise(
@@ -248,6 +217,43 @@ async def _get_program_or_raise(
     if program is None:
         raise ProgramNotFoundError(program_id)
     return program
+
+
+def _generate_code(
+    program: Program,
+    block_types_registry: BlockTypesRegistry,
+) -> CodeGenerationResult:
+    block_impls = [
+        block_types_registry.get_block_implementation(block.block_type)
+        for block in program.blocks
+    ]
+    block_code_objects = [
+        block_impl.generate_code(program, block)
+        for block, block_impl in zip(program.blocks, block_impls, strict=True)
+    ]
+    include_section = _format(
+        block_code.include for block_code in block_code_objects
+    )
+    declaration_section = _format(
+        block_code.declaration for block_code in block_code_objects
+    )
+    main_loop_body_section = _format(
+        block_code.main_loop_body for block_code in block_code_objects
+    )
+    errors = [
+        code_error
+        for block_code in block_code_objects
+        for code_error in block_code.errors
+    ]
+
+    return CodeGenerationResult(
+        code=PROGRAM_TEMPLATE.format(
+            include_section=include_section,
+            declaration_section=declaration_section,
+            loop_section=main_loop_body_section,
+        ),
+        errors=errors,
+    )
 
 
 def _format(code_lines: Iterable[str], indent: int = 0) -> str:

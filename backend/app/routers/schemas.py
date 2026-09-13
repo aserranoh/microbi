@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.domain.models import (
     AddBlockRequest,
+    CompileOptions,
     ConnectBlocksRequest,
     DataType,
     FieldType,
@@ -28,7 +29,6 @@ class AddBlockRequestIn(BaseModel):
 
 
 class UpdateBlockRequestIn(BaseModel):
-    program_id: UUID
     block_name: str | None = Field(
         default=None,
         pattern=r"^[_a-zA-Z][_a-zA-Z0-9]*$",
@@ -36,9 +36,14 @@ class UpdateBlockRequestIn(BaseModel):
     block_position: PositionIn | None = None
     block_config: dict[str, object] | None = None
 
-    def domain_model(self, block_id: UUID) -> UpdateBlockRequest:
+    def domain_model(
+        self,
+        program_id: UUID,
+        block_id: UUID,
+    ) -> UpdateBlockRequest:
         return UpdateBlockRequest(
             **self.model_dump(exclude_unset=True),
+            program_id=program_id,
             block_id=block_id,
         )
 
@@ -119,3 +124,10 @@ class BlockTypeResponse(BaseModel):
     description: str
     ports: list[PortResponse]
     configuration: list[ConfigurationResponse]
+
+
+class CompileOptionsIn(BaseModel):
+    mcu: str = Field(min_length=1)
+
+    def domain_model(self) -> CompileOptions:
+        return CompileOptions(**self.model_dump())

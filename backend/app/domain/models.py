@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Protocol
+from typing import Protocol, Self
 from uuid import UUID, uuid4
 
 from .errors import (
@@ -308,18 +308,40 @@ class ConnectBlocksRequest:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class BlockCode:
+class BlockCodeGenerationError:
+    block_type: str
+    block_name: str
+    block_uuid: UUID
+    error_message: str
+
+    @classmethod
+    def from_error_message(cls, block: Block, error_message: str) -> Self:
+        return cls(
+            block_type=block.block_type,
+            block_name=block.name,
+            block_uuid=block.id,
+            error_message=error_message,
+        )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class BlockCodeGenerationResult:
+    block: Block
     include: str = ""
     declaration: str = ""
     main_loop_body: str = ""
-    errors: list[str] = field(default_factory=list)
+    errors: list[BlockCodeGenerationError] = field(
+        default_factory=list[BlockCodeGenerationError],
+    )
 
     def has_errors(self) -> bool:
         return len(self.errors) > 0
 
 
 class BlockTypeImplementation(Protocol):
-    def generate_code(self, program: Program, block: Block) -> BlockCode: ...
+    def generate_code(
+        self, program: Program, block: Block
+    ) -> BlockCodeGenerationResult: ...
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -384,14 +406,16 @@ def pin_configuration(
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class CodeGenerationError:
-    block_type: str
-    block_name: str
-    block_uuid: UUID
-    error_message: str
+class CodeGenerationResult:
+    code: str
+    errors: list[BlockCodeGenerationError] = field(
+        default_factory=list[BlockCodeGenerationError],
+    )
+
+    def has_errors(self) -> bool:
+        return len(self.errors) > 0
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class CodeGenerationResult:
-    code: str
-    errors: list[CodeGenerationError] = field(default_factory=list)
+class CompileOptions:
+    mcu: str

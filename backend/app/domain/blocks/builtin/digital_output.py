@@ -1,6 +1,7 @@
 from app.domain.models import (
     Block,
-    BlockCode,
+    BlockCodeGenerationError,
+    BlockCodeGenerationResult,
     BlockType,
     BlockTypesRegistry,
     DataType,
@@ -14,20 +15,26 @@ from app.domain.models import (
 
 
 class DigitalOutputImplementation:
-    def generate_code(self, program: Program, block: Block) -> BlockCode:
-        port = block.configuration["port"]
+    def generate_code(
+        self,
+        program: Program,
+        block: Block,
+    ) -> BlockCodeGenerationResult:
+        port = f"port_{str(block.configuration['port']).lower()}"
         pin = block.configuration["pin"]
         src_port_ref = program.who_connects_to(
             PortReference(block_id=block.id, port_name="value"),
         )
         if src_port_ref is None:
             err_msg = "No source connected to the 'value' port"
-            return BlockCode(errors=[err_msg])
+            error = BlockCodeGenerationError.from_error_message(block, err_msg)
+            return BlockCodeGenerationResult(block=block, errors=[error])
         src_block = program.get_block(src_port_ref.block_id)
 
-        return BlockCode(
-            include="<microbi/digital_output.hpp>",
-            declaration=f"digital_output<port.{port}, {pin}> {block.name};",
+        return BlockCodeGenerationResult(
+            block=block,
+            include="#include <microbi/digital_output.hpp>",
+            declaration=f"digital_output<{port}, {pin}> {block.name};",
             main_loop_body=(
                 f"{block.name}({src_block.name}.{src_port_ref.port_name});"
             ),
