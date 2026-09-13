@@ -1,7 +1,7 @@
 from typing import Protocol
 from uuid import UUID
 
-from .models import CompileOptions, Program
+from .models import CompilationArtifacts, Program
 
 
 class ProgramsRepositoryPort(Protocol):
@@ -19,5 +19,5 @@ class ProgramsRepositoryPort(Protocol):
 
 
 class CompilerPort(Protocol):
-    def compile(self, cpp_code: str, options: CompileOptions) -> str: ...
+    def compile(self, program: Program) -> CompilationArtifacts: ...
     def get_mcus(self) -> list[str]: ...

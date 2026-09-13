@@ -10,9 +10,10 @@ from pydantic import TypeAdapter
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.collection import AsyncCollection
 
-from .models import CompileOptions, Program
+from .models import ArtifactType, CompilationArtifacts, Program
 
 COLLECTION_NAME = "programs"
+COMPILATION_FLAGS = "-O2"
 
 
 @dataclass(slots=True, kw_only=True)
@@ -78,17 +79,26 @@ class AvrGccCompiler:
     def get_mcus(self) -> list[str]:
         return [mcu.value for mcu in AvrMcu]
 
-    def compile(self, cpp_code: str, options: CompileOptions) -> str:
+    def compile(self, program: Program) -> CompilationArtifacts:
+        cpp_artifact = program.get_artifact(ArtifactType.CPP)
+        if cpp_artifact is None:
+            err_msg = "CPP artifact not found in the program"
+            raise ValueError(err_msg)
+
         with TemporaryDirectory() as temp_dir:
             cpp_file = Path(temp_dir) / "main.cpp"
-            cpp_file.write_text(cpp_code)
+            cpp_file.write_text(cpp_artifact.contents)
+            asm_file = self._compile_asm(cpp_file, program.mcu, self.lib_path)
             elf_file = self._compile_and_link(
                 cpp_file,
-                options.mcu,
+                program.mcu,
                 self.lib_path,
             )
             hex_file = self._generate_hex(elf_file)
-            return hex_file.read_text()
+            return CompilationArtifacts(
+                hex_code=hex_file.read_text(),
+                asm_code=asm_file.read_text(),
+            )
 
     def _compile_and_link(
         self,
@@ -101,6 +111,7 @@ class AvrGccCompiler:
             [
                 "avr-gcc",
                 f"-mmcu={mcu}",
+                COMPILATION_FLAGS,
                 "-o",
                 elf_file.as_posix(),
                 cpp_file.as_posix(),
@@ -109,6 +120,28 @@ class AvrGccCompiler:
             check=True,
         )
         return elf_file
+
+    def _compile_asm(
+        self,
+        cpp_file: Path,
+        mcu: str,
+        lib_path: Path,
+    ) -> Path:
+        asm_file = cpp_file.parent / f"{cpp_file.stem}.asm"
+        subprocess.run(
+            [
+                "avr-gcc",
+                f"-mmcu={mcu}",
+                COMPILATION_FLAGS,
+                "-S",
+                "-o",
+                asm_file.as_posix(),
+                cpp_file.as_posix(),
+                f"-I{lib_path.as_posix()}",
+            ],
+            check=True,
+        )
+        return asm_file
 
     def _generate_hex(self, elf_path: Path) -> Path:
         hex_file = elf_path.parent / f"{elf_path.stem}.hex"

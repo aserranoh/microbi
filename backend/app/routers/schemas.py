@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -5,13 +6,34 @@ from pydantic import BaseModel, Field
 
 from app.domain.models import (
     AddBlockRequest,
-    CompileOptions,
     ConnectBlocksRequest,
+    CreateProgramRequest,
     DataType,
     FieldType,
     PortDirection,
+    ProgramArtifact,
     UpdateBlockRequest,
+    UpdateProgramRequest,
 )
+
+
+class CreateProgramRequestIn(BaseModel):
+    name: str = Field(min_length=1)
+    mcu: str = Field(min_length=1)
+
+    def domain_model(self) -> CreateProgramRequest:
+        return CreateProgramRequest(**self.model_dump())
+
+
+class UpdateProgramRequestIn(BaseModel):
+    name: str | None = Field(default=None, min_length=1)
+    mcu: str | None = Field(default=None, min_length=1)
+
+    def domain_model(self, program_id: UUID) -> UpdateProgramRequest:
+        return UpdateProgramRequest(
+            **self.model_dump(exclude_unset=True),
+            id=program_id,
+        )
 
 
 class PositionIn(BaseModel):
@@ -90,6 +112,10 @@ class ProgramResponse(BaseModel):
     name: str
     blocks: list[BlockResponse]
     connections: list[ConnectionResponse]
+    mcu: str
+    revision: int
+    modified_at: datetime
+    artifacts: list[ProgramArtifact]
 
 
 class IntegerConfigurationResponse(BaseModel):
@@ -124,10 +150,3 @@ class BlockTypeResponse(BaseModel):
     description: str
     ports: list[PortResponse]
     configuration: list[ConfigurationResponse]
-
-
-class CompileOptionsIn(BaseModel):
-    mcu: str = Field(min_length=1)
-
-    def domain_model(self) -> CompileOptions:
-        return CompileOptions(**self.model_dump())

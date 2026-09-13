@@ -20,19 +20,21 @@ from app.domain.errors import (
     PortNotFoundError,
     ProgramNotFoundError,
     UnknownBlockConfigurationError,
+    UnsupportedMcuError,
 )
 from app.domain.models import (
     BlockTypesRegistry,
-    CodeGenerationResult,
     Program,
+    ProgramBuildResult,
 )
 
 from .schemas import (
     AddBlockRequestIn,
-    CompileOptionsIn,
     ConnectBlocksRequestIn,
+    CreateProgramRequestIn,
     ProgramResponse,
     UpdateBlockRequestIn,
+    UpdateProgramRequestIn,
 )
 
 router = APIRouter(prefix="/programs", tags=["programs"])
@@ -71,17 +73,54 @@ async def get_program(
     response_model=ProgramResponse,
 )
 async def create_program(
-    program_name: Annotated[str, Body(min_length=1, embed=True)],
+    request_in: Annotated[CreateProgramRequestIn, Body(embed=True)],
     adapter: Annotated[
         MongoProgramsRepository,
         Depends(get_programs_repository),
     ],
+    compiler: Annotated[AvrGccCompiler, Depends(get_avr_gcc_compiler)],
 ) -> Program:
     try:
-        return await use_cases.create_program(program_name, adapter)
+        request = request_in.domain_model()
+        return await use_cases.create_program(request, adapter, compiler)
     except DuplicatedProgramError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        ) from e
+    except UnsupportedMcuError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
+
+@router.put("/{program_id}", response_model=ProgramResponse)
+async def update_program(
+    program_id: UUID,
+    request_in: Annotated[UpdateProgramRequestIn, Body(embed=True)],
+    adapter: Annotated[
+        MongoProgramsRepository,
+        Depends(get_programs_repository),
+    ],
+    compiler: Annotated[AvrGccCompiler, Depends(get_avr_gcc_compiler)],
+) -> Program:
+    try:
+        request = request_in.domain_model(program_id)
+        return await use_cases.update_program(request, adapter, compiler)
+    except ProgramNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+    except DuplicatedProgramError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        ) from e
+    except UnsupportedMcuError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         ) from e
 
@@ -261,22 +300,32 @@ async def remove_connection(
 @router.post("/{program_id}/build")
 async def build(
     program_id: UUID,
-    compile_options_in: CompileOptionsIn,
     adapter: Annotated[
         MongoProgramsRepository,
         Depends(get_programs_repository),
     ],
     registry: Annotated[BlockTypesRegistry, Depends(get_block_types_registry)],
     compiler: Annotated[AvrGccCompiler, Depends(get_avr_gcc_compiler)],
-) -> CodeGenerationResult:
+) -> ProgramBuildResult:
     try:
-        return await use_cases.build(
-            program_id,
-            compile_options_in.domain_model(),
-            adapter,
-            registry,
-            compiler,
-        )
+        return await use_cases.build(program_id, adapter, registry, compiler)
+    except ProgramNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+
+
+@router.post("/{program_id}/clean-build", response_model=ProgramResponse)
+async def clean_build(
+    program_id: UUID,
+    adapter: Annotated[
+        MongoProgramsRepository,
+        Depends(get_programs_repository),
+    ],
+) -> Program:
+    try:
+        return await use_cases.clean_build(program_id, adapter)
     except ProgramNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

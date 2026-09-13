@@ -81,3 +81,9 @@ class UnknownBlockConfigurationError(DomainError):
             f"`{block_type_name}`"
         )
         super().__init__(msg)
+
+
+class UnsupportedMcuError(DomainError):
+    def __init__(self, mcu: str) -> None:
+        msg = f"MCU `{mcu}` is not supported"
+        super().__init__(msg)

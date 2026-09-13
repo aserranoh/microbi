@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Protocol, Self
 from uuid import UUID, uuid4
@@ -22,6 +23,10 @@ def ensure_non_empty_name(name: str) -> None:
         raise ValueError(err_msg)
 
 
+def now_utc() -> datetime:
+    return datetime.now(UTC)
+
+
 class PortDirection(StrEnum):
     INPUT = "input"
     OUTPUT = "output"
@@ -37,6 +42,12 @@ class DataType(StrEnum):
 class FieldType(StrEnum):
     INTEGER = "integer"
     ENUM = "enum"
+
+
+class ArtifactType(StrEnum):
+    CPP = "cpp"
+    ASM = "asm"
+    HEX = "hex"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -164,8 +175,10 @@ class Block:
     position: Position
     configuration: dict[str, object]
 
-    def update_configuration(self, new_config: dict[str, object]) -> None:
+    def update_configuration(self, new_config: dict[str, object]) -> bool:
+        previous_config = self.configuration.copy()
         self.configuration.update(new_config)
+        return previous_config != self.configuration
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -181,15 +194,31 @@ class Connection:
     target: PortReference
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ProgramArtifact:
+    type: ArtifactType
+    mcu: str
+    program_revision: int
+    generated_at: datetime = field(default_factory=now_utc)
+    contents: str
+
+
 @dataclass(slots=True, kw_only=True)
 class Program:
     id: UUID = field(default_factory=uuid4)
     name: str
     blocks: list[Block] = field(default_factory=list[Block])
     connections: list[Connection] = field(default_factory=list[Connection])
+    mcu: str = ""
+    revision: int = 1
+    modified_at: datetime = field(default_factory=now_utc)
+    artifacts: list[ProgramArtifact] = field(
+        default_factory=list[ProgramArtifact],
+    )
 
     def add_block(self, block: Block) -> None:
         self.blocks.append(block)
+        self._update_revision()
 
     def connect(
         self,
@@ -218,6 +247,7 @@ class Program:
         src_ref = PortReference(block_id=source.id, port_name=source_port)
         tgt_ref = PortReference(block_id=target.id, port_name=target_port)
         self.connections.append(Connection(source=src_ref, target=tgt_ref))
+        self._update_revision()
 
     def generate_block_name(self, root: str) -> str:
         root = re.sub(r"[^a-zA-Z0-9_]", "_", root)
@@ -259,18 +289,40 @@ class Program:
             and connection.target.block_id != block.id
         ]
         self.blocks.remove(block)
+        self._update_revision()
 
     def remove_connection(self, connection: Connection) -> None:
         self.connections.remove(connection)
+        self._update_revision()
 
-    def rename_block(self, block: Block, new_name: str) -> None:
+    def rename_block(self, block: Block, new_name: str) -> bool:
         repeated = next(
             (b for b in self.blocks if b != block and b.name == new_name),
             None,
         )
         if repeated is not None:
             raise DuplicatedBlockNameError(new_name)
-        block.name = new_name
+        if block.name != new_name:
+            block.name = new_name
+            return True
+        return False
+
+    def change_block_position(
+        self,
+        block: Block,
+        new_position: Position,
+    ) -> bool:
+        if block.position != new_position:
+            block.position = new_position
+            return True
+        return False
+
+    def update_block_configuration(
+        self,
+        block: Block,
+        new_config: dict[str, object],
+    ) -> bool:
+        return block.update_configuration(new_config)
 
     def who_connects_to(self, port_ref: PortReference) -> PortReference | None:
         connection = next(
@@ -280,6 +332,58 @@ class Program:
         if connection is None:
             return None
         return connection.source
+
+    def get_artifact(
+        self,
+        artifact_type: ArtifactType,
+    ) -> ProgramArtifact | None:
+        return next(
+            (
+                artifact
+                for artifact in self.artifacts
+                if artifact.type == artifact_type
+            ),
+            None,
+        )
+
+    def add_artifact(
+        self,
+        artifact_type: ArtifactType,
+        contents: str,
+    ) -> ProgramArtifact:
+        artifact = ProgramArtifact(
+            type=artifact_type,
+            mcu=self.mcu,
+            program_revision=self.revision,
+            contents=contents,
+        )
+        self.artifacts.append(artifact)
+        return artifact
+
+    def is_outdated(self, artifact: ProgramArtifact) -> bool:
+        return artifact.program_revision < self.revision
+
+    def _update_revision(self) -> None:
+        self.modified_at = now_utc()
+        artifact_revision = max(
+            (artifact.program_revision for artifact in self.artifacts),
+            default=0,
+        )
+        if artifact_revision == self.revision:
+            self.revision += 1
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CreateProgramRequest:
+    name: str
+    mcu: str
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class UpdateProgramRequest:
+    id: UUID
+    name: str | None = None
+    mcu: str | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -389,6 +493,12 @@ class BlockTypesRegistry:
         )
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CompilationArtifacts:
+    asm_code: str
+    hex_code: str
+
+
 def port_configuration(name: str = "port") -> EnumConfiguration:
     return EnumConfiguration(
         name=name,
@@ -406,16 +516,11 @@ def pin_configuration(
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class CodeGenerationResult:
-    code: str
+class ProgramBuildResult:
+    program: Program
     errors: list[BlockCodeGenerationError] = field(
         default_factory=list[BlockCodeGenerationError],
     )
 
     def has_errors(self) -> bool:
         return len(self.errors) > 0
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CompileOptions:
-    mcu: str

@@ -5,18 +5,23 @@ from .errors import (
     BlocksConnectionError,
     DuplicatedProgramError,
     ProgramNotFoundError,
+    UnsupportedMcuError,
 )
 from .models import (
     AddBlockRequest,
+    ArtifactType,
     Block,
+    BlockCodeGenerationError,
     BlockType,
     BlockTypesRegistry,
-    CodeGenerationResult,
-    CompileOptions,
     ConnectBlocksRequest,
+    CreateProgramRequest,
     PortDirection,
     Program,
+    ProgramBuildResult,
     UpdateBlockRequest,
+    UpdateProgramRequest,
+    now_utc,
 )
 from .ports import CompilerPort, ProgramsRepositoryPort
 
@@ -44,13 +49,19 @@ async def get_all_programs(
 
 
 async def create_program(
-    program_name: str,
+    request: CreateProgramRequest,
     programs_repo: ProgramsRepositoryPort,
+    compiler: CompilerPort,
 ) -> Program:
-    program = await programs_repo.get_by_name(program_name)
+    program = await programs_repo.get_by_name(request.name)
     if program is not None:
-        raise DuplicatedProgramError(program_name)
-    new_program = Program(name=program_name)
+        raise DuplicatedProgramError(request.name)
+    if request.mcu not in compiler.get_mcus():
+        raise UnsupportedMcuError(request.mcu)
+    new_program = Program(
+        name=request.name,
+        mcu=request.mcu,
+    )
     await programs_repo.create(new_program)
     return new_program
 
@@ -60,6 +71,30 @@ async def get_program(
     programs_repo: ProgramsRepositoryPort,
 ) -> Program:
     return await _get_program_or_raise(program_id, programs_repo)
+
+
+async def update_program(
+    request: UpdateProgramRequest,
+    programs_repo: ProgramsRepositoryPort,
+    compiler: CompilerPort,
+) -> Program:
+    program = await _get_program_or_raise(request.id, programs_repo)
+    if request.name is not None:
+        duplicated_program = await programs_repo.get_by_name(request.name)
+        if (
+            duplicated_program is not None
+            and duplicated_program.id != request.id
+        ):
+            raise DuplicatedProgramError(request.name)
+        program.name = request.name
+    if request.mcu is not None and request.mcu != program.mcu:
+        if request.mcu not in compiler.get_mcus():
+            raise UnsupportedMcuError(request.mcu)
+        program.mcu = request.mcu
+        program.revision += 1
+        program.modified_at = now_utc()
+    await programs_repo.update(program)
+    return program
 
 
 async def delete_program(
@@ -111,13 +146,24 @@ async def update_block(
     program = await _get_program_or_raise(request.program_id, programs_repo)
     block = program.get_block(request.block_id)
     block_type = blocks_registry.get_block_type(block.block_type)
+
+    renamed = False
     if request.block_name:
-        program.rename_block(block, request.block_name)
+        renamed = program.rename_block(block, request.block_name)
+
+    changed_position = False
     if request.block_position is not None:
-        block.position = request.block_position
+        changed_position = program.change_block_position(
+            block,
+            request.block_position,
+        )
+
     block_type.validate_configuration(request.block_config)
-    block.update_configuration(request.block_config)
-    await programs_repo.update(program)
+    updated = program.update_block_configuration(block, request.block_config)
+    if renamed or changed_position or updated:
+        program.modified_at = now_utc()
+        program.revision += 1
+        await programs_repo.update(program)
     return program
 
 
@@ -197,17 +243,41 @@ async def get_all_block_types(
 
 async def build(
     program_id: UUID,
-    compile_options: CompileOptions,
     programs_repo: ProgramsRepositoryPort,
     block_types_registry: BlockTypesRegistry,
     compiler: CompilerPort,
-) -> CodeGenerationResult:
+) -> ProgramBuildResult:
     program = await _get_program_or_raise(program_id, programs_repo)
-    cpp_code = _generate_code(program, block_types_registry)
-    if cpp_code.has_errors():
-        return cpp_code
-    hex_code = compiler.compile(cpp_code.code, compile_options)
-    return CodeGenerationResult(code=hex_code)
+
+    cpp_artifact = program.get_artifact(ArtifactType.CPP)
+    if cpp_artifact is None or program.is_outdated(cpp_artifact):
+        cpp_code, errors = _generate_code(program, block_types_registry)
+        if errors:
+            return ProgramBuildResult(program=program, errors=errors)
+        cpp_artifact = program.add_artifact(
+            artifact_type=ArtifactType.CPP,
+            contents=cpp_code,
+        )
+        await programs_repo.update(program)
+
+    hex_artifact = program.get_artifact(ArtifactType.HEX)
+    if hex_artifact is None or program.is_outdated(hex_artifact):
+        compilation_artifacts = compiler.compile(program)
+        program.add_artifact(ArtifactType.ASM, compilation_artifacts.asm_code)
+        program.add_artifact(ArtifactType.HEX, compilation_artifacts.hex_code)
+        await programs_repo.update(program)
+
+    return ProgramBuildResult(program=program)
+
+
+async def clean_build(
+    program_id: UUID,
+    programs_repo: ProgramsRepositoryPort,
+) -> Program:
+    program = await _get_program_or_raise(program_id, programs_repo)
+    program.artifacts = []
+    await programs_repo.update(program)
+    return program
 
 
 async def _get_program_or_raise(
@@ -222,7 +292,7 @@ async def _get_program_or_raise(
 def _generate_code(
     program: Program,
     block_types_registry: BlockTypesRegistry,
-) -> CodeGenerationResult:
+) -> tuple[str, list[BlockCodeGenerationError]]:
     block_impls = [
         block_types_registry.get_block_implementation(block.block_type)
         for block in program.blocks
@@ -245,15 +315,14 @@ def _generate_code(
         for block_code in block_code_objects
         for code_error in block_code.errors
     ]
-
-    return CodeGenerationResult(
-        code=PROGRAM_TEMPLATE.format(
+    code = ""
+    if not errors:
+        code = PROGRAM_TEMPLATE.format(
             include_section=include_section,
             declaration_section=declaration_section,
             loop_section=main_loop_body_section,
-        ),
-        errors=errors,
-    )
+        )
+    return code, errors
 
 
 def _format(code_lines: Iterable[str], indent: int = 0) -> str:
