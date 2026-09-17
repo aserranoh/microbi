@@ -1,6 +1,8 @@
 # v0.0.2
 
-- TODO.
+- Added support for atmega328p.
+- Building hex blob.
+- Added download to loader devices feature.
 
 # v0.0.1
 
