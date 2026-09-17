@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import Menubar from 'primevue/menubar'
 import Button from 'primevue/button'
+import Select from 'primevue/select'
 import type { MenuItem } from 'primevue/menuitem'
 import NewProgramDialog from '@/components/dialogs/NewProgramDialog.vue'
 import OpenProgramDialog from '@/components/dialogs/OpenProgramDialog.vue'
+import DownloadDialog from '@/components/dialogs/DownloadDialog.vue'
 import { useProgramStore } from '@/stores/program'
-import { createProgram, deleteProgram, generateCode } from '@/api/programs'
+import { createProgram, deleteProgram, updateProgram, buildProgram } from '@/api/programs'
+import { getMcus } from '@/api/compiler'
 import type { Program } from '@/api/types'
 
 const { t } = useI18n()
@@ -20,6 +23,36 @@ const programStore = useProgramStore()
 const isDark = ref(document.documentElement.classList.contains('dark'))
 const showNewDialog = ref(false)
 const showOpenDialog = ref(false)
+const showDownloadDialog = ref(false)
+const downloadHex = ref('')
+const downloadMcu = ref('')
+
+const mcus = ref<string[]>([])
+const selectedMcu = ref<string | null>(null)
+
+getMcus().then((list) => {
+  mcus.value = list
+})
+
+watch(
+  () => programStore.currentProgram?.mcu,
+  (mcu) => {
+    selectedMcu.value = mcu ?? null
+  },
+  { immediate: true },
+)
+
+async function onMcuChange(mcu: string) {
+  if (!programStore.currentProgram || mcu === programStore.currentProgram.mcu) return
+  try {
+    const updated = await updateProgram(programStore.currentProgram.id, { mcu })
+    programStore.setProgram(updated)
+  } catch {
+    // revert selector to current program mcu on error
+    selectedMcu.value = programStore.currentProgram.mcu
+    toast.add({ severity: 'error', summary: t('toast.error_title'), detail: t('toast.mcu_update_failed'), life: 3000 })
+  }
+}
 
 function toggleDark() {
   isDark.value = !isDark.value
@@ -62,30 +95,32 @@ const menuItems = computed<MenuItem[]>(() => [
     label: t('menu.project'),
     items: [
       {
-        label: t('menu.project_build'),
-        icon: 'pi pi-cog',
+        label: t('menu.project_download'),
+        icon: 'pi pi-download',
+        disabled: !programStore.currentProgram,
         command: async () => {
           if (!programStore.currentProgram) {
             toast.add({ severity: 'warn', summary: t('toast.error_title'), detail: t('toast.no_program_open'), life: 3000 })
             return
           }
           try {
-            const result = await generateCode(programStore.currentProgram.id)
+            const result = await buildProgram(programStore.currentProgram.id)
+            programStore.setProgram(result.program)
             if (result.errors.length > 0) {
               const detail = result.errors.map((e) => `${e.block_name}: ${e.error_message}`).join('\n')
               toast.add({ severity: 'error', summary: t('toast.build_error'), detail, life: 8000 })
-            } else {
-              const blob = new Blob([result.code], { type: 'text/plain' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = 'main.cpp'
-              a.click()
-              URL.revokeObjectURL(url)
-              toast.add({ severity: 'success', summary: t('toast.success_title'), detail: t('toast.build_success'), life: 3000 })
+              return
             }
+            const hexArtifact = result.program.artifacts.find((a) => a.type === 'hex')
+            if (!hexArtifact) {
+              toast.add({ severity: 'error', summary: t('toast.error_title'), detail: t('toast.no_hex_artifact'), life: 4000 })
+              return
+            }
+            downloadHex.value = hexArtifact.contents
+            downloadMcu.value = result.program.mcu
+            showDownloadDialog.value = true
           } catch {
-            toast.add({ severity: 'error', summary: t('toast.error_title'), detail: t('toast.error_title'), life: 3000 })
+            toast.add({ severity: 'error', summary: t('toast.error_title'), detail: t('toast.build_failed'), life: 3000 })
           }
         },
       },
@@ -93,9 +128,9 @@ const menuItems = computed<MenuItem[]>(() => [
   },
 ])
 
-async function onNewProgram(name: string) {
+async function onNewProgram(name: string, mcu: string) {
   try {
-    const program = await createProgram(name)
+    const program = await createProgram(name, mcu)
     programStore.setProgram(program)
     toast.add({ severity: 'success', summary: t('toast.success_title'), detail: t('toast.program_created', { name }), life: 3000 })
   } catch (err: unknown) {
@@ -119,9 +154,18 @@ async function onOpenProgram(program: Program) {
   <div class="flex items-center border-b border-surface-200 dark:border-surface-700 px-2 bg-surface-0 dark:bg-surface-900 select-none">
     <Menubar
       :model="menuItems"
-      class="flex-1"
       :pt="{ root: { style: 'border: none; box-shadow: none; background: transparent; padding: 0;' } }"
     />
+    <Select
+      v-if="programStore.currentProgram"
+      v-model="selectedMcu"
+      :options="mcus"
+      size="small"
+      class="ml-1"
+      :pt="{ root: { style: 'min-width: 8rem;' } }"
+      @change="onMcuChange(selectedMcu!)"
+    />
+    <div class="flex-1" />
     <Button
       :icon="isDark ? 'pi pi-sun' : 'pi pi-moon'"
       rounded
@@ -134,4 +178,5 @@ async function onOpenProgram(program: Program) {
 
   <NewProgramDialog v-model:visible="showNewDialog" @confirm="onNewProgram" />
   <OpenProgramDialog v-model:visible="showOpenDialog" @confirm="onOpenProgram" />
+  <DownloadDialog v-model:visible="showDownloadDialog" :hex="downloadHex" :mcu="downloadMcu" />
 </template>

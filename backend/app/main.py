@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .domain.blocks.builtin import digital_input, digital_output, int8_constant
 from .domain.models import BlockTypesRegistry
-from .routers import block_types, compiler, programs
+from .routers import block_types, compiler, devices, programs
 
 
 @asynccontextmanager
@@ -30,3 +30,4 @@ app.add_middleware(
 app.include_router(block_types.router)
 app.include_router(programs.router)
 app.include_router(compiler.router)
+app.include_router(devices.router)

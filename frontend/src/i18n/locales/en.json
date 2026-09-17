@@ -5,13 +5,15 @@
         "programs_open": "Open",
         "programs_delete": "Delete",
         "project": "Project",
-        "project_build": "Build"
+        "project_download": "Download"
     },
     "dialog": {
         "new_program": {
             "title": "New Program",
             "name_label": "Program Name",
             "name_placeholder": "Enter program name",
+            "mcu_label": "MCU",
+            "mcu_placeholder": "Select MCU",
             "confirm": "Create",
             "cancel": "Cancel"
         },
@@ -20,6 +22,18 @@
             "no_programs": "No programs found.",
             "confirm": "Open",
             "cancel": "Cancel"
+        },
+        "download": {
+            "title": "Download to Device",
+            "port_label": "Serial Port",
+            "no_ports": "No ports available",
+            "grant_port": "Add Port",
+            "flash": "Flash",
+            "close": "Close",
+            "flashing": "Flashing…",
+            "success_title": "Done",
+            "success_message": "The code has been flashed to device {device}.",
+            "success_close": "OK"
         }
     },
     "confirm": {
@@ -47,8 +61,10 @@
         "program_created": "Program \"{name}\" created.",
         "program_deleted": "Program deleted.",
         "program_opened": "Program \"{name}\" opened.",
-        "build_success": "Code generated. Downloading main.cpp…",
-        "build_error": "Code generation errors:",
+        "build_error": "Build errors:",
+        "build_failed": "Build failed.",
+        "no_hex_artifact": "Build succeeded but no hex artifact was produced.",
+        "mcu_update_failed": "Failed to update MCU.",
         "connection_failed": "Cannot connect: {detail}",
         "block_update_failed": "Failed to update block: {detail}",
         "block_add_failed": "Failed to add block: {detail}",

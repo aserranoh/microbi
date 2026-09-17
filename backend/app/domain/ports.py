@@ -1,7 +1,7 @@
 from typing import Protocol
 from uuid import UUID
 
-from .models import CompilationArtifacts, Program
+from .models import CompilationArtifacts, DeviceInfo, Program
 
 
 class ProgramsRepositoryPort(Protocol):
@@ -21,3 +21,7 @@ class ProgramsRepositoryPort(Protocol):
 class CompilerPort(Protocol):
     def compile(self, program: Program) -> CompilationArtifacts: ...
     def get_mcus(self) -> list[str]: ...
+
+
+class DevicesRepositoryPort(Protocol):
+    async def get_by_id(self, device_id: str) -> DeviceInfo: ...

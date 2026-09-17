@@ -524,3 +524,9 @@ class ProgramBuildResult:
 
     def has_errors(self) -> bool:
         return len(self.errors) > 0
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DeviceInfo:
+    name: str
+    id: str

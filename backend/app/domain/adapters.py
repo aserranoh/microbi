@@ -1,3 +1,4 @@
+import logging
 import subprocess
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -10,7 +11,7 @@ from pydantic import TypeAdapter
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.collection import AsyncCollection
 
-from .models import ArtifactType, CompilationArtifacts, Program
+from .models import ArtifactType, CompilationArtifacts, DeviceInfo, Program
 
 COLLECTION_NAME = "programs"
 COMPILATION_FLAGS = "-O2"
@@ -156,3 +157,26 @@ class AvrGccCompiler:
             check=True,
         )
         return hex_file
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DevicesRepository:
+    devices_file_path: Path
+
+    async def get_by_id(self, device_id: str) -> DeviceInfo:
+        devices = self._load_devices()
+        for device in devices:
+            if device.id.lower() == device_id.lower():
+                return device
+        return DeviceInfo(name="Unknown", id=device_id)
+
+    def _load_devices(self) -> list[DeviceInfo]:
+        try:
+            contents = self.devices_file_path.read_text()
+            return TypeAdapter(list[DeviceInfo]).validate_json(contents)
+        except (OSError, ValueError) as e:
+            err_msg = (
+                f"Failed to load devices from {self.devices_file_path}: {e}"
+            )
+            logging.warning(err_msg)
+            return []

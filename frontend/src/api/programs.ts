@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { CodeGenerationResult, Program } from './types'
+import type { BuildResult, Program } from './types'
 
 export async function getPrograms(): Promise<Program[]> {
     const response = await apiClient.get<Program[]>('/programs/')
@@ -11,8 +11,20 @@ export async function getProgram(id: string): Promise<Program> {
     return response.data
 }
 
-export async function createProgram(name: string): Promise<Program> {
-    const response = await apiClient.post<Program>('/programs/', { program_name: name })
+export async function createProgram(name: string, mcu: string): Promise<Program> {
+    const response = await apiClient.post<Program>('/programs/', {
+        request_in: { name, mcu },
+    })
+    return response.data
+}
+
+export async function updateProgram(
+    id: string,
+    fields: { name?: string; mcu?: string },
+): Promise<Program> {
+    const response = await apiClient.put<Program>(`/programs/${id}`, {
+        request_in: fields,
+    })
     return response.data
 }
 
@@ -76,9 +88,7 @@ export async function removeConnection(programId: string, connectionId: string):
     return response.data
 }
 
-export async function generateCode(programId: string): Promise<CodeGenerationResult> {
-    const response = await apiClient.post<CodeGenerationResult>(
-        `/programs/${programId}/generate-code`,
-    )
+export async function buildProgram(programId: string): Promise<BuildResult> {
+    const response = await apiClient.post<BuildResult>(`/programs/${programId}/build`)
     return response.data
 }

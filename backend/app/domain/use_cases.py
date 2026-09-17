@@ -16,6 +16,7 @@ from .models import (
     BlockTypesRegistry,
     ConnectBlocksRequest,
     CreateProgramRequest,
+    DeviceInfo,
     PortDirection,
     Program,
     ProgramBuildResult,
@@ -23,7 +24,7 @@ from .models import (
     UpdateProgramRequest,
     now_utc,
 )
-from .ports import CompilerPort, ProgramsRepositoryPort
+from .ports import CompilerPort, DevicesRepositoryPort, ProgramsRepositoryPort
 
 PROGRAM_TEMPLATE = """
 {include_section}
@@ -278,6 +279,13 @@ async def clean_build(
     program.artifacts = []
     await programs_repo.update(program)
     return program
+
+
+async def get_device_info(
+    device_id: str,
+    devices_repo: DevicesRepositoryPort,
+) -> DeviceInfo:
+    return await devices_repo.get_by_id(device_id)
 
 
 async def _get_program_or_raise(

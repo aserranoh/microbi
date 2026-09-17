@@ -1,5 +1,6 @@
 export type PortDirection = 'input' | 'output'
 export type DataType = 'bool' | 'int8' | 'int16' | 'int32'
+export type ArtifactType = 'cpp' | 'asm' | 'hex'
 
 export interface Port {
     name: string
@@ -66,21 +67,38 @@ export interface Connection {
     target: PortReference
 }
 
+export interface ProgramArtifact {
+    type: ArtifactType
+    mcu: string
+    program_revision: number
+    generated_at: string
+    contents: string
+}
+
 export interface Program {
     id: string
     name: string
+    mcu: string
+    revision: number
+    modified_at: string
     blocks: Block[]
     connections: Connection[]
+    artifacts: ProgramArtifact[]
 }
 
-export interface CodeGenerationError {
+export interface BuildError {
     block_type: string
     block_name: string
     block_uuid: string
     error_message: string
 }
 
-export interface CodeGenerationResult {
-    code: string
-    errors: CodeGenerationError[]
+export interface BuildResult {
+    program: Program
+    errors: BuildError[]
+}
+
+export interface DeviceInfo {
+    id: string
+    name: string
 }
